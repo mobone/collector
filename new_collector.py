@@ -47,14 +47,12 @@ def get_tickers():
 
 def network_worker(ticker_queue):
     s = requests.session()
-    request_time = None
-
+    request_num = 0
     data_list = []
-    while marketOpen() or ticker_queue.qsize()>0:
-        if request_time == None:
 
-            request_time = str(datetime.now()).split(".")[0]
-            request_time = request_time.split(" ")[1]
+    while marketOpen() or ticker_queue.qsize()>0:
+
+
         ticker = ticker_queue.get()
         ticker = ticker.replace('\n','')
 
@@ -96,13 +94,13 @@ def network_worker(ticker_queue):
 
 
         if start != -1 and end != -1 and price != -1:
-            #work_queue.put((str(datetime.now()).replace(':','.'), ticker, price, html_page.text[start:end+9]))
-            filename = 'c:/to_process/%s %s %s %s.html' % ((request_time.replace(":","."), update_time.replace(":","."), ticker, price))
+
+            filename = 'c:/to_process/%s %s %s %s.html' % ((request_num, update_time.replace(":","."), ticker, price))
 
             data_list.append((filename, html_page.text[start:end+9]))
 
         if ticker_queue.qsize()==0:
-            request_time = None
+            request_num = request_num + 1
             while len(data_list)>0:
                 i = data_list.pop()
                 f = open(i[0], 'w')

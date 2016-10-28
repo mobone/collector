@@ -12,18 +12,21 @@ from random import shuffle
 
 warnings.simplefilter(action = "ignore")
 
-# add request time
-
+"""
 computername = os.environ['COMPUTERNAME']
 if computername == "APPSERVER":
-    path = "c:/to_process/"
-    num_cpu = 3
+    path = "c:/to_process_old_2/"
+    num_cpu = 2
 else:
-    path = "//appserver/to_process/"
-    num_cpu = 8
+    path = "//appserver/to_process_old/"
+    num_cpu = 9
+"""
+
+path = "c:/to_process/"
+num_cpu = 2
 
 def connect():
-    con = MySQLdb.connect(host="192.168.1.20", user="new_root", passwd="C00kie32!", db="options_test")
+    con = MySQLdb.connect(host="192.168.1.20", user="user2", passwd="cookie", db="options")
     c = con.cursor()
     return (con, c)
 
@@ -37,27 +40,36 @@ def xnull(s):
 
 def data_cruncher(work_queue):
     (con, c) = connect()
+    """
     computername = os.environ['COMPUTERNAME']
 
     if computername == "APPSERVER":
-        path = "c:/to_process/"
+        path = "c:/to_process_old_2/"
     else:
-        path = "//appserver/to_process/"
-
+        path = "//appserver/to_process_old/"
+    """
     while (work_queue.qsize()>0):
         filename = work_queue.get()
-
         try:
             f = open(path+filename,'rt')
             html_text = f.read()
             f.close()
             remove(path+filename)
         except Exception as e:
+            print(e)
             continue
 
+        # needs more work here!
         current_work_unit = filename.replace('.html','').split(' ')
-
-        (request_time, update_date, update_time) = (current_work_unit[0], current_work_unit[1], current_work_unit[2])
+        """
+        if computername != "APPSERVER":
+            (update_date, update_time) = (current_work_unit[0], current_work_unit[1])
+            (ticker, last_price) = (current_work_unit[2], current_work_unit[3])
+        else:
+            (update_date, update_time) = (current_work_unit[1], current_work_unit[2])
+            (ticker, last_price) = (current_work_unit[3], current_work_unit[4])
+        """
+        (update_num, update_date, update_time) = (current_work_unit[0], current_work_unit[1], current_work_unit[2])
         (ticker, last_price) = (current_work_unit[3], current_work_unit[4])
 
         html_text = html_text.replace('<tr class="chainrow acenter understated ', '</table><table class="chainrow acenter understated ')
@@ -94,20 +106,16 @@ def data_cruncher(work_queue):
             call_table['Type'] = 'C'
             put_table['Type'] = 'P'
 
+            update_time =  update_time.split(".")[:3]
+            update_time = update_time[0]+"."+update_time[1]+"."+update_time[2]
+
             final_table = call_table.append(put_table)
             final_table['Expiration_Date'] = date
             final_table['Last_Stock_Price'] = last_price
             final_table['Ticker'] = ticker
+            final_table['update_num'] = update_num
             final_table['Update_Date'] = datetime.strptime(update_date, '%Y-%m-%d')
-
-
-            update_time =  update_time.split(".")[:3]
-            request_time =  request_time.split(".")[:3]
-
-
             final_table['Update_Time'] = datetime.strptime(update_time, '%H.%M.%S')
-            final_table['Request_Time'] = datetime.strptime(update_time, '%H.%M.%S')
-
 
             db_table = []
             for row in final_table.iterrows():
@@ -116,12 +124,13 @@ def data_cruncher(work_queue):
                 for key in final_table.columns:
                     value = xnull(row[key])
                     db_row.append(value)
-
+                #db_row.append(None)  # remove this
                 db_table.append(tuple(db_row))
 
+
             sql = """INSERT INTO marketwatch_data (`Last_Option_Price`, `Change_Option_Price`, `Vol`, `Bid`, `Ask`, `Open_Int`, `Strike`, `Type_Option`,
-             `Expiration_Date`, `Last_Stock_Price`, `Ticker`, `Update_Date`,
-             `Update_Time`, `Request_Time`)
+             `Expiration_Date`, `Last_Stock_Price`, `Ticker`, `update_num`, `Update_Date`,
+             `Update_Time`)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
             #print(sql)
             c.executemany(sql , db_table)
@@ -131,10 +140,11 @@ if __name__ == '__main__':
     work_queue = Queue()
 
     files_list = [ f for f in listdir(path) if isfile(join(path,f)) ]
+    print(len(files_list))
     shuffle(files_list)
     for i in files_list:
         work_queue.put(i)
-
+    print(work_queue.qsize())
     for i in range(num_cpu):
         p = Process(target = data_cruncher, args = (work_queue,)).start()
         sleep(1)
